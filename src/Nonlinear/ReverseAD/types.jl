@@ -69,7 +69,8 @@ mutable struct _FunctionStorage
         subexpression_linearity,
         subexpression_edgelist,
         subexpression_variables,
-        moi_index_to_consecutive_index,
+        moi_index_to_consecutive_index;
+        dense::Bool=false
     )
         nodes = _replace_moi_variables(nodes, moi_index_to_consecutive_index)
         adj = Nonlinear.adjacency_matrix(nodes)
@@ -94,11 +95,34 @@ mutable struct _FunctionStorage
                 subexpression_edgelist,
                 subexpression_variables,
             )
-            hess_I, hess_J, rinfo = Coloring.hessian_color_preprocess(
-                edgelist,
-                num_variables,
-                coloring_storage,
-            )
+            if !dense
+                hess_I, hess_J, rinfo = Coloring.hessian_color_preprocess(
+                    edgelist,
+                    num_variables,
+                    coloring_storage,
+                )
+            else
+                n = num_variables
+                nnzH = div(n * (n+1), 2)
+                hess_I = Vector{Int}(undef, nnzH)
+                hess_J = Vector{Int}(undef, nnzH)
+                index = 0
+                for j = 1:n
+                    for i = 1:j
+                        index += 1
+                        hess_I[index] = i
+                        hess_J[index] = j
+                    end
+                end
+                rinfo = Coloring.RecoveryInfo(
+                        Vector{Vector{Int}}(undef, 0),
+                        Vector{Vector{Int}}(undef, 0),
+                        Vector{Vector{Int}}(undef, 0),
+                        [i for i = 1:n],
+                        n,
+                        nnzH,
+                        [i for i = 1:n])
+            end
             seed_matrix = Coloring.seed_matrix(rinfo)
             return new(
                 nodes,
